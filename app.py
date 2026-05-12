@@ -112,3 +112,36 @@ if not st.session_state.historico.empty:
         except Exception as e:
             st.error(f"Error al enviar el correo: {e}")
             st.info("Asegúrate de haber configurado los 'Secrets' en Streamlit.")
+
+# --- 4. EXPORTACIÓN Y ENVÍO ---
+    st.divider()
+    st.dataframe(st.session_state.datos_obra)
+   
+    nombre_archivo = "reporte_obra.xlsx"
+    st.session_state.datos_obra.to_excel(nombre_archivo, index=False)
+
+    col_b1, col_b2 = st.columns(2)
+    with col_b1:
+        with open(nombre_archivo, "rb") as f:
+            st.download_button("📥 Descargar Excel", f, file_name=nombre_archivo)
+    with col_b2:
+        if st.button("📧 Enviar por Correo"):
+            try:
+                u, p, prof = st.secrets["email"]["user"], st.secrets["email"]["pass"], st.secrets["email"]["profe"]
+                msg = MIMEMultipart()
+                msg['From'], msg['To'], msg['Subject'] = u, f"{prof}, {u}", "Reporte Obra Actualizado"
+                msg.attach(MIMEText("Se adjunta el seguimiento de obra.", 'plain'))
+                with open(nombre_archivo, "rb") as a:
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(a.read())
+                    encoders.encode_base64(part)
+                    part.add_header('Content-Disposition', f"attachment; filename={nombre_archivo}")
+                    msg.attach(part)
+                s = smtplib.SMTP('smtp.gmail.com', 587)
+                s.starttls()
+                s.login(u, p)
+                s.send_message(msg)
+                s.quit()
+                st.success("✅ Enviado correctamente.")
+            except Exception as e:
+                st.error(f"Error: {e}")
