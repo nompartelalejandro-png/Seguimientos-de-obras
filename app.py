@@ -8,140 +8,134 @@ from email.mime.base import MIMEBase
 from email import encoders
 import os
 
-# Configuración de la página
-st.set_page_config(page_title="Seguimiento de Obra - Fundación Masaveu", layout="centered")
+# 1. CONFIGURACIÓN DE PÁGINA Y ESTILO
+st.set_page_config(page_title="App Seguimiento de Obra - Fundación Masaveu", layout="centered")
 
-# 1. Incorporar imagen del logo (Asegúrate de tener el archivo logo.png en GitHub)
-try:
+# Estilo personalizado para el logo y títulos
+st.markdown("""
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #1a4a7a; color: white; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 2. INCORPORAR LOGO (Se busca archivo logo.png en el repositorio)
+if os.path.exists("logo.png"):
     st.image("logo.png", width=200)
-except:
+else:
     st.title("🏗️ Seguimiento de Obra")
 
-# Listas de opciones
+# 3. LISTADO DE TAREAS (Según requerimientos)
 tareas = [
-    "Trazado y marcado de cajas, tubos y cuadros", "Ejecución rozas en paredes y techos",
-    "Montaje de soportes", "Colocación tubos y conductos", "Tendido de cables",
-    "Identificación y etiquetado", "Conexionado de cables en bornes o regletas",
-    "Instalación y conexionado de mecanismos", "Fijación de carril DIN y mecanismos en cuadro eléctrico",
-    "Cableado interno del cuadro eléctrico", "Configuración de equipos domóticos y/o automáticos",
-    "Conexionado de sensores/actuadores de equipos domóticos/automáticos", "Pruebas de continuidad",
-    "Pruebas de aislamiento", "Verificación de tierras", "Programación del automatismo", "Pruebas de funcionamiento"
+    "Trazado y marcado de cajas, tubos y cuadros",
+    "Ejecución rozas en paredes y techos",
+    "Montaje de soportes",
+    "Colocación tubos y conductos",
+    "Tendido de cables",
+    "Identificación y etiquetado",
+    "Conexionado de cables en bornes o regletas",
+    "Instalación y conexionado de mecanismos",
+    "Fijación de carril DIN y mecanismos en cuadro eléctrico",
+    "Cableado interno del cuadro eléctrico",
+    "Configuración de equipos domóticos y/o automáticos",
+    "Conexionado de sensores/actuadores de equipos domóticos/automáticos",
+    "Pruebas de continuidad",
+    "Pruebas de aislamiento",
+    "Verificación de tierras",
+    "Programación del automatismo",
+    "Pruebas de funcionamiento"
 ]
 
+# 4. LISTADO DE ESTADOS
 estados = [
-    "Avance de la tarea en torno al 25% aprox.", "Avance de la tarea en torno al 50% aprox.",
-    "Avance de la tarea en torno al 75% aprox.", "OK, finalizado sin errores",
-    "Finalizado, pero con errores pendientes de corregir", "Finalizado y corregidos los errores"
+    "Avance de la tarea en torno al 25% aprox.",
+    "Avance de la tarea en torno al 50% aprox.",
+    "Avance de la tarea en torno al 75% aprox.",
+    "OK, finalizado sin errores",
+    "Finalizado, pero con errores pendientes de corregir",
+    "Finalizado y corregidos los errores"
 ]
 
-# Inicializar el historial en la sesión de Streamlit (Temporal)
-if 'historico' not in st.session_state:
-    st.session_state.historico = pd.DataFrame(columns=["Fecha", "Trabajador", "Tarea", "Estado"])
+# 5. GESTIÓN DE DATOS (Sesión temporal)
+if 'db_obra' not in st.session_state:
+    st.session_state.db_obra = pd.DataFrame(columns=["Fecha", "Trabajador", "Tarea", "Estado"])
 
-# Formulario de entrada
-with st.form("registro_obra"):
-    st.subheader("Nuevo Registro de Actividad")
-    nombre_trabajador = st.text_input("Nombre del trabajador")
-    fecha_envio = st.date_input("Fecha de envío", date.today())
-    tarea_seleccionada = st.selectbox("Seleccione la tarea:", tareas)
-    estado_seleccionado = st.selectbox("Estado de la tarea:", estados)
+# 6. FORMULARIO DE ENTRADA
+with st.expander("➕ Añadir Nuevo Registro", expanded=True):
+    with st.form("formulario_obra"):
+        col1, col2 = st.columns(2)
+        with col1:
+            trabajador = st.text_input("Nombre del Trabajador")
+        with col2:
+            fecha = st.date_input("Fecha de envío", date.today())
+        
+        tarea_sel = st.selectbox("Seleccione la Tarea:", tareas)
+        estado_sel = st.selectbox("Estado de la Tarea:", estados)
+        
+        btn_add = st.form_submit_button("Registrar Tarea")
+
+if btn_add:
+    if trabajador:
+        nuevo_registro = {
+            "Fecha": fecha.strftime("%d/%m/%Y"),
+            "Trabajador": trabajador,
+            "Tarea": tarea_sel,
+            "Estado": estado_sel
+        }
+        st.session_state.db_obra = pd.concat([st.session_state.db_obra, pd.DataFrame([nuevo_registro])], ignore_index=True)
+        st.success("Registro añadido correctamente")
+    else:
+        st.warning("Por favor, indica el nombre del trabajador")
+
+# 7. VISUALIZACIÓN Y DESCARGA DE EXCEL
+st.subheader("📋 Registros de la Sesión")
+st.dataframe(st.session_state.db_obra, use_container_width=True)
+
+if not st.session_state.db_obra.empty:
+    file_name = "seguimiento_obra.xlsx"
+    st.session_state.db_obra.to_excel(file_name, index=False)
     
-    submit = st.form_submit_button("Añadir al registro")
-
-if submit:
-    nuevo_dato = {
-        "Fecha": fecha_envio.strftime("%d/%m/%Y"),
-        "Trabajador": nombre_trabajador,
-        "Tarea": tarea_seleccionada,
-        "Estado": estado_seleccionado
-    }
-    st.session_state.historico = pd.concat([st.session_state.historico, pd.DataFrame([nuevo_dato])], ignore_index=True)
-    st.success("Registro añadido localmente.")
-
-# Mostrar tabla actual
-st.write("### Registros actuales", st.session_state.historico)
-
-# --- Generación de Excel ---
-if not st.session_state.historico.empty:
-    nombre_archivo = "seguimiento_obra.xlsx"
-    st.session_state.historico.to_excel(nombre_archivo, index=False)
-    
-    with open(nombre_archivo, "rb") as f:
+    with open(file_name, "rb") as f:
         st.download_button(
-            label="📥 Descargar Excel",
+            label="📥 Descargar Excel al Dispositivo",
             data=f,
-            file_name=nombre_archivo,
+            file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-    # --- Envío por Correo ---
+    # 8. BOTÓN DE ENVÍO POR EMAIL (Para evitar pérdida de datos)
     st.divider()
-    st.subheader("Envío por Email")
-    email_profesora = "fmo@fundacionmasaveu.com" # Cambiar por el real
+    st.subheader("📧 Envío Seguro a la Empresa")
+    st.info("Como los datos son temporales, usa este botón para enviar el Excel por correo antes de cerrar la app.")
     
-    if st.button("📧 Enviar reporte por correo"):
+    if st.button("Enviar Excel por Email"):
         try:
-            # Configuración desde Secrets
-            remitente = st.secrets["EMAIL_SENDER"]
-            password = st.secrets["EMAIL_PASSWORD"]
-            
+            # Estos datos se configuran en Streamlit Cloud -> Settings -> Secrets
+            email_sender = st.secrets["EMAIL_USER"]
+            email_password = st.secrets["EMAIL_PASS"]
+            email_receiver = "fmo@fundacionmasaveu.com"  # Mail de la profesora/empresa
+
             msg = MIMEMultipart()
-            msg['From'] = remitente
-            msg['To'] = f"{email_profesora}, {remitente}"
-            msg['Subject'] = f"Reporte de Obra - {nombre_trabajador}"
+            msg['From'] = email_sender
+            msg['To'] = f"{email_receiver}, {email_sender}"
+            msg['Subject'] = f"REPORTE OBRA: {trabajador} - {fecha}"
             
-            cuerpo = f"Se adjunta el reporte de obra generado por {nombre_trabajador} el día {fecha_envio}."
-            msg.attach(MIMEText(cuerpo, 'plain'))
-            
-            # Adjuntar archivo
-            attachment = open(nombre_archivo, "rb")
-            part = MIMEBase('application', 'octet-stream')
-            part.set_payload(attachment.read())
-            encoders.encode_base64(part)
-            part.add_header('Content-Disposition', f"attachment; filename= {nombre_archivo}")
-            msg.attach(part)
-            
-            # Servidor SMTP (Ejemplo con Gmail)
+            body = f"Se adjunta el reporte de obra generado por {trabajador}."
+            msg.attach(MIMEText(body, 'plain'))
+
+            with open(file_name, "rb") as attachment:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(attachment.read())
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f"attachment; filename= {file_name}")
+                msg.attach(part)
+
             server = smtplib.SMTP('smtp.gmail.com', 587)
             server.starttls()
-            server.login(remitente, password)
+            server.login(email_sender, email_password)
             server.send_message(msg)
             server.quit()
             
-            st.success(f"Correo enviado con éxito a {email_profesora} y {remitente}")
+            st.success(f"✅ Enviado con éxito a {email_receiver}")
         except Exception as e:
-            st.error(f"Error al enviar el correo: {e}")
-            st.info("Asegúrate de haber configurado los 'Secrets' en Streamlit.")
-
-# --- 4. EXPORTACIÓN Y ENVÍO ---
-    st.divider()
-    st.dataframe(st.session_state.datos_obra)
-   
-    nombre_archivo = "reporte_obra.xlsx"
-    st.session_state.datos_obra.to_excel(nombre_archivo, index=False)
-
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        with open(nombre_archivo, "rb") as f:
-            st.download_button("📥 Descargar Excel", f, file_name=nombre_archivo)
-    with col_b2:
-        if st.button("📧 Enviar por Correo"):
-            try:
-                u, p, prof = st.secrets["email"]["user"], st.secrets["email"]["pass"], st.secrets["email"]["profe"]
-                msg = MIMEMultipart()
-                msg['From'], msg['To'], msg['Subject'] = u, f"{prof}, {u}", "Reporte Obra Actualizado"
-                msg.attach(MIMEText("Se adjunta el seguimiento de obra.", 'plain'))
-                with open(nombre_archivo, "rb") as a:
-                    part = MIMEBase('application', 'octet-stream')
-                    part.set_payload(a.read())
-                    encoders.encode_base64(part)
-                    part.add_header('Content-Disposition', f"attachment; filename={nombre_archivo}")
-                    msg.attach(part)
-                s = smtplib.SMTP('smtp.gmail.com', 587)
-                s.starttls()
-                s.login(u, p)
-                s.send_message(msg)
-                s.quit()
-                st.success("✅ Enviado correctamente.")
-            except Exception as e:
-                st.error(f"Error: {e}")
+            st.error(f"Error: No se pudo enviar el correo. Verifica los Secrets. Detalle: {e}")
