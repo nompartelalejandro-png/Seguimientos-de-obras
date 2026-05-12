@@ -113,7 +113,7 @@ if not st.session_state.db_obra.empty:
             # Estos datos se configuran en Streamlit Cloud -> Settings -> Secrets
             email_sender = st.secrets["EMAIL_USER"]
             email_password = st.secrets["EMAIL_PASS"]
-            email_receiver = "fmo@fundacionmasaveu.com"  # Mail de la profesora/empresa
+            email_receiver = "ana@fundacionmasaveu.com"  # Mail de la profesora/empresa
 
             msg = MIMEMultipart()
             msg['From'] = email_sender
