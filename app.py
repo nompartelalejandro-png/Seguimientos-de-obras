@@ -1,31 +1,147 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
 import os
 
-# 1. CONFIGURACIÓN DE PÁGINA Y ESTILO
-st.set_page_config(page_title="App Seguimiento de Obra - Fundación Masaveu", layout="centered")
+# =========================================================
+# CONFIGURACIÓN GENERAL
+# =========================================================
 
-# Estilo personalizado para el logo y títulos
+st.set_page_config(
+    page_title="Sistema Inteligente de Seguimiento de Obra",
+    page_icon="🏗️",
+    layout="wide"
+)
+
+# =========================================================
+# ESTILOS
+# =========================================================
+
 st.markdown("""
-    <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #1a4a7a; color: white; }
-    </style>
-    """, unsafe_allow_html=True)
+<style>
 
-# 2. INCORPORAR LOGO (Se busca archivo logo.png en el repositorio)
+.main {
+    background-color: #f4f6f9;
+}
+
+h1, h2, h3 {
+    color: #1a4a7a;
+}
+
+.stButton>button {
+    width: 100%;
+    border-radius: 8px;
+    height: 3em;
+    background-color: #1a4a7a;
+    color: white;
+    font-weight: bold;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# =========================================================
+# LOGO
+# =========================================================
+
 if os.path.exists("logo.png"):
-    st.image("logo.png", width=200)
-else:
-    st.title("🏗️ Seguimiento de Obra")
+    st.image("logo.png", width=220)
 
-# 3. LISTADO DE TAREAS (Según requerimientos)
+st.title("🏗️ Sistema Inteligente de Seguimiento de Obra")
+
+st.markdown("""
+Aplicación desarrollada con Python + Streamlit + IA para centralizar automáticamente
+los reportes enviados por trabajadores y generar un único Excel global de seguimiento.
+""")
+
+# =========================================================
+# ARCHIVO GLOBAL
+# =========================================================
+
+ARCHIVO_GLOBAL = "seguimiento_global_obra.xlsx"
+
+# =========================================================
+# CARGA DATOS EXISTENTES
+# =========================================================
+
+if os.path.exists(ARCHIVO_GLOBAL):
+    df_global = pd.read_excel(ARCHIVO_GLOBAL)
+else:
+    df_global = pd.DataFrame(columns=[
+        "Fecha",
+        "Trabajador",
+        "Tarea",
+        "Estado",
+        "Porcentaje",
+        "Observaciones",
+        "Archivo_Origen"
+    ])
+
+# =========================================================
+# SUBIDA DE ARCHIVOS EXCEL
+# =========================================================
+
+st.divider()
+
+st.header("📂 Subir archivos Excel de trabajadores")
+
+st.info("""
+Puedes subir uno o varios archivos Excel enviados por los trabajadores.
+La aplicación unificará automáticamente toda la información.
+""")
+
+archivos_subidos = st.file_uploader(
+    "Selecciona archivos Excel",
+    type=["xlsx"],
+    accept_multiple_files=True
+)
+
+if archivos_subidos:
+
+    lista_dataframes = []
+
+    for archivo in archivos_subidos:
+
+        try:
+
+            df_temp = pd.read_excel(archivo)
+
+            # Añadir nombre archivo
+            df_temp["Archivo_Origen"] = archivo.name
+
+            lista_dataframes.append(df_temp)
+
+        except Exception as e:
+            st.error(f"❌ Error leyendo {archivo.name}: {e}")
+
+    if lista_dataframes:
+
+        df_unificado = pd.concat(
+            lista_dataframes,
+            ignore_index=True
+        )
+
+        # Unir con datos existentes
+        df_global = pd.concat(
+            [df_global, df_unificado],
+            ignore_index=True
+        )
+
+        # Eliminar duplicados
+        df_global = df_global.drop_duplicates()
+
+        # Guardar automáticamente
+        df_global.to_excel(
+            ARCHIVO_GLOBAL,
+            index=False
+        )
+
+        st.success("✅ Archivos unificados correctamente")
+
+# =========================================================
+# LISTADO TAREAS
+# =========================================================
+
 tareas = [
     "Trazado y marcado de cajas, tubos y cuadros",
     "Ejecución rozas en paredes y techos",
@@ -33,109 +149,267 @@ tareas = [
     "Colocación tubos y conductos",
     "Tendido de cables",
     "Identificación y etiquetado",
-    "Conexionado de cables en bornes o regletas",
-    "Instalación y conexionado de mecanismos",
-    "Fijación de carril DIN y mecanismos en cuadro eléctrico",
-    "Cableado interno del cuadro eléctrico",
-    "Configuración de equipos domóticos y/o automáticos",
-    "Conexionado de sensores/actuadores de equipos domóticos/automáticos",
+    "Conexionado de cables",
+    "Instalación de mecanismos",
+    "Montaje cuadro eléctrico",
+    "Cableado interno del cuadro",
+    "Configuración domótica",
+    "Conexionado sensores y actuadores",
     "Pruebas de continuidad",
     "Pruebas de aislamiento",
     "Verificación de tierras",
-    "Programación del automatismo",
+    "Programación automatismos",
     "Pruebas de funcionamiento"
 ]
 
-# 4. LISTADO DE ESTADOS
-estados = [
-    "Avance de la tarea en torno al 25% aprox.",
-    "Avance de la tarea en torno al 50% aprox.",
-    "Avance de la tarea en torno al 75% aprox.",
-    "OK, finalizado sin errores",
-    "Finalizado, pero con errores pendientes de corregir",
-    "Finalizado y corregidos los errores"
-]
+# =========================================================
+# ESTADOS
+# =========================================================
 
-# 5. GESTIÓN DE DATOS (Sesión temporal)
-if 'db_obra' not in st.session_state:
-    st.session_state.db_obra = pd.DataFrame(columns=["Fecha", "Trabajador", "Tarea", "Estado"])
+estados = {
+    "25%": 25,
+    "50%": 50,
+    "75%": 75,
+    "Finalizado": 100,
+    "Finalizado con errores": 90,
+    "Corregido y finalizado": 100
+}
 
-# 6. FORMULARIO DE ENTRADA
-with st.expander("➕ Añadir Nuevo Registro", expanded=True):
-    with st.form("formulario_obra"):
-        col1, col2 = st.columns(2)
-        with col1:
-            trabajador = st.text_input("Nombre del Trabajador")
-        with col2:
-            fecha = st.date_input("Fecha de envío", date.today())
-        
-        tarea_sel = st.selectbox("Seleccione la Tarea:", tareas)
-        estado_sel = st.selectbox("Estado de la Tarea:", estados)
-        
-        btn_add = st.form_submit_button("Registrar Tarea")
+# =========================================================
+# FORMULARIO MANUAL
+# =========================================================
 
-if btn_add:
-    if trabajador:
+st.divider()
+
+st.header("➕ Registrar avance manual")
+
+with st.form("registro_manual"):
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        trabajador = st.text_input("👷 Trabajador")
+
+    with col2:
+        fecha = st.date_input(
+            "📅 Fecha",
+            date.today()
+        )
+
+    tarea = st.selectbox(
+        "📌 Selecciona la tarea",
+        tareas
+    )
+
+    estado = st.selectbox(
+        "📈 Estado",
+        list(estados.keys())
+    )
+
+    observaciones = st.text_area(
+        "📝 Observaciones"
+    )
+
+    guardar = st.form_submit_button(
+        "Guardar Registro"
+    )
+
+if guardar:
+
+    if trabajador.strip() == "":
+        st.warning("⚠️ Debes introducir el nombre del trabajador")
+
+    else:
+
         nuevo_registro = {
             "Fecha": fecha.strftime("%d/%m/%Y"),
             "Trabajador": trabajador,
-            "Tarea": tarea_sel,
-            "Estado": estado_sel
+            "Tarea": tarea,
+            "Estado": estado,
+            "Porcentaje": estados[estado],
+            "Observaciones": observaciones,
+            "Archivo_Origen": "Registro Manual"
         }
-        st.session_state.db_obra = pd.concat([st.session_state.db_obra, pd.DataFrame([nuevo_registro])], ignore_index=True)
-        st.success("Registro añadido correctamente")
-    else:
-        st.warning("Por favor, indica el nombre del trabajador")
 
-# 7. VISUALIZACIÓN Y DESCARGA DE EXCEL
-st.subheader("📋 Registros de la Sesión")
-st.dataframe(st.session_state.db_obra, use_container_width=True)
+        df_global = pd.concat(
+            [df_global, pd.DataFrame([nuevo_registro])],
+            ignore_index=True
+        )
 
-if not st.session_state.db_obra.empty:
-    file_name = "seguimiento_obra.xlsx"
-    st.session_state.db_obra.to_excel(file_name, index=False)
-    
-    with open(file_name, "rb") as f:
+        # Guardar automáticamente
+        df_global.to_excel(
+            ARCHIVO_GLOBAL,
+            index=False
+        )
+
+        st.success("✅ Registro guardado correctamente")
+
+# =========================================================
+# DASHBOARD
+# =========================================================
+
+st.divider()
+
+st.header("📊 Dashboard Global de la Obra")
+
+if not df_global.empty:
+
+    total_registros = len(df_global)
+
+    trabajadores_activos = df_global["Trabajador"].nunique()
+
+    avance_medio = round(
+        df_global["Porcentaje"].mean(),
+        2
+    )
+
+    tareas_finalizadas = len(
+        df_global[df_global["Porcentaje"] >= 100]
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric(
+        "📋 Registros Totales",
+        total_registros
+    )
+
+    col2.metric(
+        "👷 Trabajadores",
+        trabajadores_activos
+    )
+
+    col3.metric(
+        "📈 Avance Medio",
+        f"{avance_medio}%"
+    )
+
+    col4.metric(
+        "✅ Finalizadas",
+        tareas_finalizadas
+    )
+
+# =========================================================
+# FILTROS
+# =========================================================
+
+st.divider()
+
+st.header("🔍 Filtrar Información")
+
+if not df_global.empty:
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        trabajadores_lista = sorted(
+            df_global["Trabajador"]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+
+        filtro_trabajador = st.selectbox(
+            "Filtrar por trabajador",
+            ["Todos"] + trabajadores_lista
+        )
+
+    with col2:
+
+        filtro_estado = st.selectbox(
+            "Filtrar por estado",
+            ["Todos"] + list(estados.keys())
+        )
+
+    df_filtrado = df_global.copy()
+
+    if filtro_trabajador != "Todos":
+
+        df_filtrado = df_filtrado[
+            df_filtrado["Trabajador"] == filtro_trabajador
+        ]
+
+    if filtro_estado != "Todos":
+
+        df_filtrado = df_filtrado[
+            df_filtrado["Estado"] == filtro_estado
+        ]
+
+else:
+
+    df_filtrado = df_global.copy()
+
+# =========================================================
+# TABLA PRINCIPAL
+# =========================================================
+
+st.divider()
+
+st.header("📑 Registros Unificados")
+
+st.dataframe(
+    df_filtrado,
+    use_container_width=True,
+    height=500
+)
+
+# =========================================================
+# GRÁFICOS
+# =========================================================
+
+st.divider()
+
+st.header("📊 Visualización del Estado de la Obra")
+
+if not df_global.empty:
+
+    st.subheader("Estado de tareas")
+
+    grafico_estado = df_global["Estado"].value_counts()
+
+    st.bar_chart(grafico_estado)
+
+    st.subheader("Registros por trabajador")
+
+    grafico_trabajadores = (
+        df_global["Trabajador"]
+        .value_counts()
+    )
+
+    st.bar_chart(grafico_trabajadores)
+
+# =========================================================
+# EXPORTACIÓN FINAL
+# =========================================================
+
+st.divider()
+
+st.header("📥 Descargar Informe Global")
+
+if os.path.exists(ARCHIVO_GLOBAL):
+
+    with open(ARCHIVO_GLOBAL, "rb") as f:
+
         st.download_button(
-            label="📥 Descargar Excel al Dispositivo",
+            label="📥 Descargar Excel Global Unificado",
             data=f,
-            file_name=file_name,
+            file_name=ARCHIVO_GLOBAL,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-    # 8. BOTÓN DE ENVÍO POR EMAIL (Para evitar pérdida de datos)
-    st.divider()
-    st.subheader("📧 Envío Seguro a la Empresa")
-    st.info("Como los datos son temporales, usa este botón para enviar el Excel por correo antes de cerrar la app.")
-    
-    if st.button("Enviar Excel por Email"):
-        try:
-            # Estos datos se configuran en Streamlit Cloud -> Settings -> Secrets
-            email_sender = st.secrets["EMAIL_USER"]
-            email_password = st.secrets["EMAIL_PASS"]
-            email_receiver = "ana@fundacionmasaveu.com"  # Mail de la profesora/empresa
+# =========================================================
+# INFORMACIÓN FINAL
+# =========================================================
 
-            msg = MIMEMultipart()
-            msg['From'] = email_sender
-            msg['To'] = f"{email_receiver}, {email_sender}"
-            msg['Subject'] = f"REPORTE OBRA: {trabajador} - {fecha}"
-            
-            body = f"Se adjunta el reporte de obra generado por {trabajador}."
-            msg.attach(MIMEText(body, 'plain'))
+st.divider()
 
-            with open(file_name, "rb") as attachment:
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(attachment.read())
-                encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f"attachment; filename= {file_name}")
-                msg.attach(part)
+st.success("""
+Sistema de unificación automática de partes de obra desarrollado con IA.
+""")
 
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(email_sender, email_password)
-            server.send_message(msg)
-            server.quit()
-            
-            st.success(f"✅ Enviado con éxito a {email_receiver}")
-        except Exception as e:
-            st.error(f"Error: No se pudo enviar el correo. Verifica los Secrets. Detalle: {e}")
+st.caption("""
+Aplicación desarrollada con Streamlit + Python + Pandas para la automatización
+de reportes y seguimiento técnico de obra.
+""")
